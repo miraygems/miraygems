@@ -2,11 +2,10 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 from datetime import datetime
-import tempfile
-from PIL import Image
-import pytesseract
-import re
+import requests
 import os
+import re
+from PIL import Image
 import uuid
 import base64
 
@@ -69,14 +68,12 @@ def get_summary(year):
     ).reset_index()
     return summary
 
-# OCR using pytesseract
+# OCR using OCR.space API
 def extract_text_and_save(file, year, category):
     try:
-        img = Image.open(file).convert('L')
         today_str = datetime.today().strftime("%d-%m-%Y")
         base_name = f"receipt_{today_str}"
         counter = 1
-
         while True:
             local_name = f"{base_name}_{counter}.png"
             local_path = os.path.join(LOCAL_SAVE_DIR, local_name)
@@ -84,19 +81,33 @@ def extract_text_and_save(file, year, category):
                 break
             counter += 1
 
-        img.save(local_path)
-        text = pytesseract.image_to_string(img)
+        with open(local_path, "wb") as f:
+            f.write(file.getbuffer())
 
         # Upload to Google Drive
         upload_receipt(local_path, year, category)
 
-        return text, local_path
+        # OCR API request
+        with open(local_path, 'rb') as image_file:
+            response = requests.post(
+                'https://api.ocr.space/parse/image',
+                files={'filename': image_file},
+                data={'apikey': st.secrets["ocr"]["api_key"], 'language': 'eng'},
+            )
+        result = response.json()
+        if result['IsErroredOnProcessing']:
+            st.error("OCR API Error: " + result['ErrorMessage'][0])
+            return f"OCR Error: {result['ErrorMessage'][0]}", None
+
+        parsed_text = result['ParsedResults'][0]['ParsedText']
+        return parsed_text, local_path
+
     except Exception as e:
         st.error(f"OCR failed: {e}")
         return f"OCR Error: {e}", None
 
 # --- Streamlit UI ---
-st.title("Canadian Corp Expense Tracker (with Google Drive Upload)")
+st.title("Canadian Corp Expense Tracker (OCR + Google Drive)")
 
 init_db()
 
