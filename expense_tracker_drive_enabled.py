@@ -92,8 +92,8 @@ def extract_text_and_save(file, year, category):
 
         return text, local_path
     except Exception as e:
-       st.error(f"OCR failed: {e}")
-return f"OCR Error: {e}", None
+	st.error(f"OCR failed: {e}")
+	return f"OCR Error: {e}", None
 
 # --- Streamlit UI ---
 st.title("Canadian Corp Expense Tracker (with Google Drive Upload)")
