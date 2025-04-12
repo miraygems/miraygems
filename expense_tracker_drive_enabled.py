@@ -137,7 +137,7 @@ def compress_image(path, max_size_kb=1024, quality=85, step=5):
 
 def extract_text_and_save(file, year):
     try:
-        
+
         # Try to extract date from text (format: dd-mm-yyyy or yyyy-mm-dd or mm/dd/yyyy)
         import datetime
         date_match = re.search(r"(\d{2}[/-]\d{2}[/-]\d{4}|\d{4}[/-]\d{2}[/-]\d{2})", parsed_text)
@@ -146,7 +146,7 @@ def extract_text_and_save(file, year):
         else:
             receipt_date = datetime.datetime.today().strftime("%d-%m-%Y")
         base_name = f"receipt_{receipt_date}"
-    
+
         base_name = f"receipt_{today_str}"
         counter = 1
         while True:
@@ -156,10 +156,10 @@ def extract_text_and_save(file, year):
                 break
             counter += 1
 
-        
+
         # Save original uploaded file
-        with open(local_path, "wb") as f:
-            f.write(file.getbuffer())
+            with open(local_path, "wb") as f_receipt:
+                f_receipt.write(manual_receipt_file.getbuffer())
 
         # Resize quickly to 1024px width if needed
         img = Image.open(local_path)
@@ -169,10 +169,10 @@ def extract_text_and_save(file, year):
             height = int((float(img.height) * float(ratio)))
             img = img.resize((1024, height), Image.Resampling.LANCZOS)
             img.save(local_path)
-    
+
 
         compress_image(local_path)
-        
+
 
         with open(local_path, 'rb') as image_file:
             response = requests.post(
@@ -185,15 +185,15 @@ def extract_text_and_save(file, year):
             st.error("OCR API Error: " + result['ErrorMessage'][0])
             return f"OCR Error: {result['ErrorMessage'][0]}", None, None, 0.0
 
-        
+
         if not result.get("ParsedResults") or len(result["ParsedResults"]) == 0:
             st.error("OCR failed: No text could be extracted from the image.")
             return "OCR Error: No text extracted", None, None, 0.0
         parsed_text = result["ParsedResults"][0]["ParsedText"]
-    
-        
+
+
         vendor_line = next((line.strip() for line in parsed_text.splitlines() if len(line.strip().split()) > 1 and any(c.isalpha() for c in line)), "Vendor")
-    
+
         detected_category = categorize_with_google(vendor_line)
         upload_receipt(local_path, year, detected_category)
 
@@ -228,56 +228,38 @@ menu = st.sidebar.selectbox("Menu", ["Enter Expense", "Upload Receipt", "View Su
 if menu == "Enter Expense":
     st.header("Enter New Expense")
     with st.form("manual_expense_form"):
-    st.subheader("Manual Entry")
-    year = st.number_input("Tax Year", min_value=2000, max_value=2100, value=datetime.now().year, key="manual_entry_year_v1")
-    date = st.date_input("Expense Date", key="manual_entry_date_v1")
-    category = st.selectbox("Category", list(CATEGORIES.keys()), key="manual_entry_category_v1")
-    description = st.text_input("Description", key="manual_entry_description_v1")
-    amount = st.number_input("Amount ($)", min_value=0.01, format="%.2f", key="manual_entry_amount_v1")
+        year = st.number_input("Tax Year", min_value=2000, max_value=2100, value=datetime.now().year, key="manual_entry_year_v1")
+        date = st.date_input("Expense Date", key="manual_entry_date_v1")
+        category = st.selectbox("Category", list(CATEGORIES.keys()), key="manual_entry_category_v1")
+        description = st.text_input("Description", key="manual_entry_description_v1")
+        amount = st.number_input("Amount ($)", min_value=0.01, format="%.2f", key="manual_entry_amount_v1")
+        manual_receipt_file = st.file_uploader("Optional: Upload receipt image manually", type=["jpg", "jpeg", "png"], key="manual_entry_receipt_v1")
+        submitted_manual = st.form_submit_button("Save Expense")
+        if submitted_manual:
+            insert_expense(year, date.isoformat(), category, description, amount)
+            st.success("Expense saved successfully!")
+            if manual_receipt_file:
+                today_str = datetime.today().strftime("%d-%m-%Y")
+                base_name = f"receipt_{today_str}"
+                counter = 1
+                while True:
+                    local_name = f"{base_name}_{counter}.png"
+                    local_path = os.path.join(LOCAL_SAVE_DIR, local_name)
+                    if not os.path.exists(local_path):
+                        break
+                    counter += 1
 
-    manual_receipt_file = st.file_uploader("Optional: Upload receipt image manually", type=["jpg", "jpeg", "png"], key="manual_entry_receipt_v1")
+                with open(local_path, "wb") as f:
+                    f.write(manual_receipt_file.getbuffer())
 
-    submitted_manual = st.form_submit_button("Save Expense")
-    if submitted_manual:
-    insert_expense(year, date.isoformat(), category, description, amount)
-    st.success("Expense saved successfully!")
-    if manual_receipt_file:
-    today_str = datetime.today().strftime("%d-%m-%Y")
-    base_name = f"receipt_{today_str}"
-    counter = 1
-    while True:
-    local_name = f"{base_name}_{counter}.png"
-    local_path = os.path.join(LOCAL_SAVE_DIR, local_name)
-    if not os.path.exists(local_path):
-    break
-    counter += 1
-    with open(local_path, "wb") as f:
-    f.write(manual_receipt_file.getbuffer())
+                img = Image.open(local_path).convert("RGB")
+                if img.width > 1024:
+                    ratio = 1024 / float(img.width)
+                    height = int(float(img.height) * ratio)
+                    img = img.resize((1024, height), Image.Resampling.LANCZOS)
+                    img.save(local_path)
 
-    img = Image.open(local_path).convert("RGB")
-    if img.width > 1024:
-    ratio = 1024 / float(img.width)
-    height = int((float(img.height) * float(ratio)))
-    img = img.resize((1024, height), Image.Resampling.LANCZOS)
-    img.save(local_path)
-
-    upload_receipt(local_path, year, category)
-
-    st.header("Enter New Expense")
-    with st.form("manual_expense_form"):
-    st.subheader("Manual Entry")
-    year = st.number_input("Tax Year", min_value=2000, max_value=2100, value=datetime.now().year, key="manual_entry_year_v1")
-    date = st.date_input("Expense Date", key="manual_entry_date_v1")
-    category = st.selectbox("Category", list(CATEGORIES.keys()), key="manual_entry_category_v1")
-    description = st.text_input("Description", key="manual_entry_description_v1")
-    amount = st.number_input("Amount ($)", min_value=0.01, format="%.2f", key="manual_entry_amount_v1")
-
-    submitted_manual = st.form_submit_button("Save Expense")
-    if submitted_manual:
-    insert_expense(year, date.isoformat(), category, description, amount)
-    st.success("Expense saved successfully!")
-
-elif menu == "Upload Receipt":
+                upload_receipt(local_path, year, category)
     st.header("Scan Receipt (Auto-Category via Google Search)")
     uploaded_file = st.file_uploader("Upload receipt image", type=["jpg", "jpeg", "png"])
     if uploaded_file:
@@ -290,13 +272,13 @@ elif menu == "Upload Receipt":
                 st.success("Receipt saved and uploaded to Google Drive.")
                 st.text_area("Extracted Text", text, height=150)
                 with st.form("upload_receipt_form"):
-                st.subheader("Confirm Detected Details")
-                date = st.date_input("Date", value=datetime.today(), key="upload_receipt_date_v1")
-                description = st.text_input("Description", value=text[:100], key="upload_receipt_description_v1")
-                category = st.selectbox("Category", list(CATEGORIES.keys()), index=list(CATEGORIES.keys()).index(category), key="upload_receipt_category_v1")
-                amount = st.number_input("Amount ($)", value=amount if amount > 0 else 0.01, min_value=0.01, format="%.2f", key="upload_receipt_amount_v1")
-                                    submitted_upload = st.form_submit_button("Save Expense")
-                    if submitted_upload:
+                    st.subheader("Confirm Detected Details")
+                    date = st.date_input("Date", value=datetime.today(), key="upload_receipt_date_v1")
+                    description = st.text_input("Description", value=text[:100], key="upload_receipt_description_v1")
+                    category = st.selectbox("Category", list(CATEGORIES.keys()), index=list(CATEGORIES.keys()).index(category), key="upload_receipt_category_v1")
+                    amount = st.number_input("Amount ($)", value=amount if amount > 0 else 0.01, min_value=0.01, format="%.2f", key="upload_receipt_amount_v1")
+        submitted_upload = st.form_submit_button("Save Expense")
+        if submitted_upload:
                     insert_expense(year, date.isoformat(), category, description, amount)
                     st.success("Google-powered categorized expense saved!")
 
