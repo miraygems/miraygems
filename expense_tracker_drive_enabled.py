@@ -147,8 +147,20 @@ def extract_text_and_save(file, year):
                 break
             counter += 1
 
+        
+        # Save original uploaded file
         with open(local_path, "wb") as f:
             f.write(file.getbuffer())
+
+        # Resize quickly to 1024px width if needed
+        img = Image.open(local_path)
+        img = img.convert("RGB")
+        if img.width > 1024:
+            ratio = 1024 / float(img.width)
+            height = int((float(img.height) * float(ratio)))
+            img = img.resize((1024, height), Image.Resampling.LANCZOS)
+            img.save(local_path)
+    
 
         compress_image(local_path)
         upload_receipt(local_path, year, "Uncategorized")
