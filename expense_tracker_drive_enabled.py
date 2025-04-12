@@ -7,7 +7,7 @@ import os
 import re
 from PIL import Image
 
-from drive_uploader import upload_receipt
+from drive_uploader import upload_receipt, get_drive_service, find_or_create_folder, upload_file_to_folder
 
 CATEGORIES = {
     "Meals & Entertainment": 0.50,
@@ -27,13 +27,10 @@ DB_FILE = "expenses.db"
 LOCAL_SAVE_DIR = "receipts"
 os.makedirs(LOCAL_SAVE_DIR, exist_ok=True)
 
-
 def download_db_from_drive():
     try:
         import io
         from googleapiclient.http import MediaIoBaseDownload
-        from drive_uploader import get_drive_service, find_or_create_folder
-
         service = get_drive_service()
         folder_id = find_or_create_folder("Receipts")
         query = f"name = 'expenses.db' and '{folder_id}' in parents"
@@ -48,18 +45,16 @@ def download_db_from_drive():
                 while not done:
                     status, done = downloader.next_chunk()
     except Exception as e:
-        print("No existing DB found or failed to load from Drive.")
+        print("DB not found or download error:", e)
 
 def upload_db_to_drive():
     try:
-        from drive_uploader import get_drive_service, find_or_create_folder, upload_file_to_folder
         upload_file_to_folder("expenses.db", "Receipts")
     except Exception as e:
-        print("Failed to upload DB to Drive.")
+        print("Upload error:", e)
 
-download_db_from_drive()
-
-
+def init_db():
+    download_db_from_drive()
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
     cur.execute("""
@@ -82,6 +77,7 @@ def insert_expense(year, date, category, description, amount):
                 (year, date, category, description, amount))
     conn.commit()
     conn.close()
+    upload_db_to_drive()
 
 def get_summary(year):
     conn = sqlite3.connect(DB_FILE)
@@ -126,6 +122,18 @@ def categorize_with_google(vendor):
     except Exception as e:
         return "Miscellaneous"
 
+def compress_image(path, max_size_kb=1024, quality=85, step=5):
+    img = Image.open(path)
+    img = img.convert("RGB")
+    width, height = img.size
+    while os.path.getsize(path) > max_size_kb * 1024 and quality > 10:
+        new_width = int(width * 0.9)
+        new_height = int(height * 0.9)
+        img = img.resize((new_width, new_height), Image.ANTIALIAS)
+        img.save(path, optimize=True, quality=quality)
+        quality -= step
+    return path
+
 def extract_text_and_save(file, year):
     try:
         today_str = datetime.today().strftime("%d-%m-%Y")
@@ -138,27 +146,10 @@ def extract_text_and_save(file, year):
                 break
             counter += 1
 
-        
-        # Save uploaded file first
         with open(local_path, "wb") as f:
             f.write(file.getbuffer())
 
-        # Resize and compress if over 1MB
-        def compress_image(path, max_size_kb=1024, quality=85, step=5):
-            img = Image.open(path)
-            img = img.convert("RGB")
-            width, height = img.size
-            while os.path.getsize(path) > max_size_kb * 1024 and quality > 10:
-                new_width = int(width * 0.9)
-                new_height = int(height * 0.9)
-                img = img.resize((new_width, new_height), Image.ANTIALIAS)
-                img.save(path, optimize=True, quality=quality)
-                quality -= step
-            return path
-
         compress_image(local_path)
-    
-
         upload_receipt(local_path, year, "Uncategorized")
 
         with open(local_path, 'rb') as image_file:
@@ -197,6 +188,7 @@ def extract_text_and_save(file, year):
         st.error(f"OCR failed: {e}")
         return f"OCR Error: {e}", None, None, 0.01
 
+# Streamlit UI
 st.title("Canadian Corp Expense Tracker (Google-Powered Categorization)")
 init_db()
 
@@ -213,7 +205,6 @@ if menu == "Enter Expense":
     if st.button("Save Expense"):
         insert_expense(year, date.isoformat(), category, description, amount)
         st.success("Expense saved successfully!")
-        upload_db_to_drive()
 
 elif menu == "Upload Receipt":
     st.header("Scan Receipt (Auto-Category via Google Search)")
