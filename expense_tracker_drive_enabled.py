@@ -137,7 +137,16 @@ def compress_image(path, max_size_kb=1024, quality=85, step=5):
 
 def extract_text_and_save(file, year):
     try:
-        today_str = datetime.today().strftime("%d-%m-%Y")
+        
+        # Try to extract date from text (format: dd-mm-yyyy or yyyy-mm-dd or mm/dd/yyyy)
+        import datetime
+        date_match = re.search(r"(\d{2}[/-]\d{2}[/-]\d{4}|\d{4}[/-]\d{2}[/-]\d{2})", parsed_text)
+        if date_match:
+            receipt_date = date_match.group(0).replace("/", "-")
+        else:
+            receipt_date = datetime.datetime.today().strftime("%d-%m-%Y")
+        base_name = f"receipt_{receipt_date}"
+    
         base_name = f"receipt_{today_str}"
         counter = 1
         while True:
@@ -176,8 +185,15 @@ def extract_text_and_save(file, year):
             st.error("OCR API Error: " + result['ErrorMessage'][0])
             return f"OCR Error: {result['ErrorMessage'][0]}", None, None, 0.0
 
-        parsed_text = result['ParsedResults'][0]['ParsedText']
-        vendor_line = parsed_text.splitlines()[0].strip()
+        
+        if not result.get("ParsedResults") or len(result["ParsedResults"]) == 0:
+            st.error("OCR failed: No text could be extracted from the image.")
+            return "OCR Error: No text extracted", None, None, 0.0
+        parsed_text = result["ParsedResults"][0]["ParsedText"]
+    
+        
+        vendor_line = next((line.strip() for line in parsed_text.splitlines() if len(line.strip().split()) > 1 and any(c.isalpha() for c in line)), "Vendor")
+    
         detected_category = categorize_with_google(vendor_line)
 
         amount = 0.01
@@ -207,7 +223,42 @@ init_db()
 
 menu = st.sidebar.selectbox("Menu", ["Enter Expense", "Upload Receipt", "View Summary"])
 
+
 if menu == "Enter Expense":
+    st.header("Enter New Expense")
+    year = st.number_input("Tax Year", min_value=2000, max_value=2100, value=datetime.now().year)
+    date = st.date_input("Expense Date")
+    category = st.selectbox("Category", list(CATEGORIES.keys()))
+    description = st.text_input("Description")
+    amount = st.number_input("Amount ($)", min_value=0.01, format="%.2f")
+
+    manual_receipt_file = st.file_uploader("Optional: Upload receipt image manually", type=["jpg", "jpeg", "png"])
+
+    if st.button("Save Expense"):
+        insert_expense(year, date.isoformat(), category, description, amount)
+        st.success("Expense saved successfully!")
+        if manual_receipt_file:
+            today_str = datetime.today().strftime("%d-%m-%Y")
+            base_name = f"receipt_{today_str}"
+            counter = 1
+            while True:
+                local_name = f"{base_name}_{counter}.png"
+                local_path = os.path.join(LOCAL_SAVE_DIR, local_name)
+                if not os.path.exists(local_path):
+                    break
+                counter += 1
+            with open(local_path, "wb") as f:
+                f.write(manual_receipt_file.getbuffer())
+
+            img = Image.open(local_path).convert("RGB")
+            if img.width > 1024:
+                ratio = 1024 / float(img.width)
+                height = int((float(img.height) * float(ratio)))
+                img = img.resize((1024, height), Image.Resampling.LANCZOS)
+                img.save(local_path)
+
+            upload_receipt(local_path, year, category)
+
     st.header("Enter New Expense")
     year = st.number_input("Tax Year", min_value=2000, max_value=2100, value=datetime.now().year)
     date = st.date_input("Expense Date")
