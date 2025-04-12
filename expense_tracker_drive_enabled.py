@@ -172,7 +172,7 @@ def extract_text_and_save(file, year):
     
 
         compress_image(local_path)
-        upload_receipt(local_path, year, "Uncategorized")
+        
 
         with open(local_path, 'rb') as image_file:
             response = requests.post(
@@ -195,6 +195,7 @@ def extract_text_and_save(file, year):
         vendor_line = next((line.strip() for line in parsed_text.splitlines() if len(line.strip().split()) > 1 and any(c.isalpha() for c in line)), "Vendor")
     
         detected_category = categorize_with_google(vendor_line)
+        upload_receipt(local_path, year, detected_category)
 
         amount = 0.01
         for line in parsed_text.splitlines():
@@ -227,12 +228,12 @@ menu = st.sidebar.selectbox("Menu", ["Enter Expense", "Upload Receipt", "View Su
 if menu == "Enter Expense":
     st.header("Enter New Expense")
     year = st.number_input("Tax Year", min_value=2000, max_value=2100, value=datetime.now().year, key="manual_year")
-    date = st.date_input("Expense Date")
-    category = st.selectbox("Category", list(CATEGORIES.keys()))
-    description = st.text_input("Description")
-    amount = st.number_input("Amount ($)", min_value=0.01, format="%.2f")
+    date = st.date_input("Expense Date", key="manual_date")
+    category = st.selectbox("Category", list(CATEGORIES.keys()), key="manual_category")
+    description = st.text_input("Description", key="manual_description")
+    amount = st.number_input("Amount ($)", min_value=0.01, format="%.2f", key="manual_amount")
 
-    manual_receipt_file = st.file_uploader("Optional: Upload receipt image manually", type=["jpg", "jpeg", "png"])
+    manual_receipt_file = st.file_uploader("Optional: Upload receipt image manually", type=["jpg", "jpeg", "png"], key="manual_receipt")
 
     if st.button("Save Expense"):
         insert_expense(year, date.isoformat(), category, description, amount)
@@ -261,10 +262,10 @@ if menu == "Enter Expense":
 
     st.header("Enter New Expense")
     year = st.number_input("Tax Year", min_value=2000, max_value=2100, value=datetime.now().year, key="manual_year")
-    date = st.date_input("Expense Date")
-    category = st.selectbox("Category", list(CATEGORIES.keys()))
-    description = st.text_input("Description")
-    amount = st.number_input("Amount ($)", min_value=0.01, format="%.2f")
+    date = st.date_input("Expense Date", key="manual_date")
+    category = st.selectbox("Category", list(CATEGORIES.keys()), key="manual_category")
+    description = st.text_input("Description", key="manual_description")
+    amount = st.number_input("Amount ($)", min_value=0.01, format="%.2f", key="manual_amount")
 
     if st.button("Save Expense"):
         insert_expense(year, date.isoformat(), category, description, amount)
