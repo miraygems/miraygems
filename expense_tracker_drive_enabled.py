@@ -227,15 +227,18 @@ menu = st.sidebar.selectbox("Menu", ["Enter Expense", "Upload Receipt", "View Su
 
 if menu == "Enter Expense":
     st.header("Enter New Expense")
-    year = st.number_input("Tax Year", min_value=2000, max_value=2100, value=datetime.now().year, key="manual_entry_year")
-    date = st.date_input("Expense Date", key="manual_entry_date")
-    category = st.selectbox("Category", list(CATEGORIES.keys()), key="manual_entry_category")
-    description = st.text_input("Description", key="manual_entry_description")
-    amount = st.number_input("Amount ($)", min_value=0.01, format="%.2f", key="manual_entry_amount")
+    with st.form("manual_expense_form"):
+        st.subheader("Manual Entry")
+    year = st.number_input("Tax Year", min_value=2000, max_value=2100, value=datetime.now().year, key="manual_entry_year_v1")
+    date = st.date_input("Expense Date", key="manual_entry_date_v1")
+    category = st.selectbox("Category", list(CATEGORIES.keys()), key="manual_entry_category_v1")
+    description = st.text_input("Description", key="manual_entry_description_v1")
+    amount = st.number_input("Amount ($)", min_value=0.01, format="%.2f", key="manual_entry_amount_v1")
 
-    manual_receipt_file = st.file_uploader("Optional: Upload receipt image manually", type=["jpg", "jpeg", "png"], key="manual_entry_receipt")
+    manual_receipt_file = st.file_uploader("Optional: Upload receipt image manually", type=["jpg", "jpeg", "png"], key="manual_entry_receipt_v1")
 
-    if st.button("Save Expense"):
+            submitted_manual = st.form_submit_button("Save Expense")
+        if submitted_manual:
         insert_expense(year, date.isoformat(), category, description, amount)
         st.success("Expense saved successfully!")
         if manual_receipt_file:
@@ -261,13 +264,16 @@ if menu == "Enter Expense":
             upload_receipt(local_path, year, category)
 
     st.header("Enter New Expense")
-    year = st.number_input("Tax Year", min_value=2000, max_value=2100, value=datetime.now().year, key="manual_entry_year")
-    date = st.date_input("Expense Date", key="manual_entry_date")
-    category = st.selectbox("Category", list(CATEGORIES.keys()), key="manual_entry_category")
-    description = st.text_input("Description", key="manual_entry_description")
-    amount = st.number_input("Amount ($)", min_value=0.01, format="%.2f", key="manual_entry_amount")
+    with st.form("manual_expense_form"):
+        st.subheader("Manual Entry")
+    year = st.number_input("Tax Year", min_value=2000, max_value=2100, value=datetime.now().year, key="manual_entry_year_v1")
+    date = st.date_input("Expense Date", key="manual_entry_date_v1")
+    category = st.selectbox("Category", list(CATEGORIES.keys()), key="manual_entry_category_v1")
+    description = st.text_input("Description", key="manual_entry_description_v1")
+    amount = st.number_input("Amount ($)", min_value=0.01, format="%.2f", key="manual_entry_amount_v1")
 
-    if st.button("Save Expense"):
+            submitted_manual = st.form_submit_button("Save Expense")
+        if submitted_manual:
         insert_expense(year, date.isoformat(), category, description, amount)
         st.success("Expense saved successfully!")
 
@@ -283,18 +289,20 @@ elif menu == "Upload Receipt":
             else:
                 st.success("Receipt saved and uploaded to Google Drive.")
                 st.text_area("Extracted Text", text, height=150)
+                with st.form("upload_receipt_form"):
                 st.subheader("Confirm Detected Details")
-                date = st.date_input("Date", value=datetime.today(), key="upload_receipt_date")
-                description = st.text_input("Description", value=text[:100], key="upload_receipt_description")
-                category = st.selectbox("Category", list(CATEGORIES.keys()), index=list(CATEGORIES.keys()).index(category), key="upload_receipt_category")
-                amount = st.number_input("Amount ($)", value=amount if amount > 0 else 0.01, min_value=0.01, format="%.2f", key="upload_receipt_amount")
-                if st.button("Save Expense"):
+                date = st.date_input("Date", value=datetime.today(), key="upload_receipt_date_v1")
+                description = st.text_input("Description", value=text[:100], key="upload_receipt_description_v1")
+                category = st.selectbox("Category", list(CATEGORIES.keys()), index=list(CATEGORIES.keys()).index(category), key="upload_receipt_category_v1")
+                amount = st.number_input("Amount ($)", value=amount if amount > 0 else 0.01, min_value=0.01, format="%.2f", key="upload_receipt_amount_v1")
+                                    submitted_upload = st.form_submit_button("Save Expense")
+                    if submitted_upload:
                     insert_expense(year, date.isoformat(), category, description, amount)
                     st.success("Google-powered categorized expense saved!")
 
 elif menu == "View Summary":
     st.header("Year-End Expense Summary")
-    year = st.number_input("Select Year", min_value=2000, max_value=2100, value=datetime.now().year, key="summary_year")
+    year = st.number_input("Select Year", min_value=2000, max_value=2100, value=datetime.now().year, key="summary_year_v1")
     df = get_summary(year)
     if not df.empty:
         st.dataframe(df)
