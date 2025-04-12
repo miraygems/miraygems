@@ -64,29 +64,34 @@ def get_summary(year):
     ).reset_index()
     return summary
 
-def guess_category(text):
-    text_lower = text.lower()
-    if any(word in text_lower for word in ["restaurant", "burger", "pizza", "cafe", "food"]):
-        return "Meals & Entertainment"
-    elif any(word in text_lower for word in ["staples", "office", "pen", "paper"]):
-        return "Office Supplies"
-    elif any(word in text_lower for word in ["uber", "taxi", "airline", "flight", "hotel"]):
-        return "Travel"
-    elif any(word in text_lower for word in ["car", "gas", "fuel"]):
-        return "Automobile"
-    elif any(word in text_lower for word in ["lawyer", "consult", "accountant"]):
-        return "Professional Fees"
-    elif any(word in text_lower for word in ["rent", "lease"]):
-        return "Rent"
-    elif any(word in text_lower for word in ["salary", "payroll"]):
-        return "Salaries/Wages"
-    elif any(word in text_lower for word in ["hydro", "utility", "internet"]):
-        return "Utilities"
-    elif any(word in text_lower for word in ["ads", "advertisement", "marketing"]):
-        return "Advertising"
-    elif any(word in text_lower for word in ["insurance", "premium"]):
-        return "Insurance"
-    else:
+def categorize_with_google(vendor):
+    try:
+        url = f"https://www.googleapis.com/customsearch/v1?q={vendor}&key={st.secrets['google_search']['api_key']}&cx={st.secrets['google_search']['cse_id']}"
+        res = requests.get(url).json()
+        desc = " ".join(item.get("snippet", "") for item in res.get("items", [])[:3]).lower()
+        if any(x in desc for x in ["restaurant", "cafe", "coffee", "burger"]):
+            return "Meals & Entertainment"
+        elif any(x in desc for x in ["office supply", "staples", "stationery", "printer"]):
+            return "Office Supplies"
+        elif any(x in desc for x in ["hotel", "flight", "travel", "airbnb", "uber"]):
+            return "Travel"
+        elif any(x in desc for x in ["lawyer", "consultant", "accountant"]):
+            return "Professional Fees"
+        elif any(x in desc for x in ["fuel", "gas", "car rental"]):
+            return "Automobile"
+        elif any(x in desc for x in ["internet", "hydro", "electricity", "utility"]):
+            return "Utilities"
+        elif any(x in desc for x in ["rent", "lease"]):
+            return "Rent"
+        elif any(x in desc for x in ["salary", "payroll"]):
+            return "Salaries/Wages"
+        elif any(x in desc for x in ["ads", "marketing", "advertisement"]):
+            return "Advertising"
+        elif any(x in desc for x in ["insurance", "premium"]):
+            return "Insurance"
+        else:
+            return "Miscellaneous"
+    except Exception as e:
         return "Miscellaneous"
 
 def extract_text_and_save(file, year):
@@ -118,14 +123,23 @@ def extract_text_and_save(file, year):
             return f"OCR Error: {result['ErrorMessage'][0]}", None, None, 0.0
 
         parsed_text = result['ParsedResults'][0]['ParsedText']
-        detected_category = guess_category(parsed_text)
+        vendor_line = parsed_text.splitlines()[0].strip()
+        detected_category = categorize_with_google(vendor_line)
 
-        amount_match = re.search(r"(?i)(total|amount)[^\d]*([0-9]+\.?[0-9]*)", parsed_text)
-        if amount_match:
-            amount = float(amount_match.group(2))
+        amount = 0.01
+        for line in parsed_text.splitlines():
+            if "total" in line.lower() and "$" in line:
+                found = re.findall(r"\$?([0-9]+\.[0-9]{2})", line)
+                if found:
+                    try:
+                        amount = max(map(float, found))
+                        break
+                    except:
+                        continue
         else:
             numbers = re.findall(r"\d+\.\d{2}", parsed_text)
-            amount = max(map(float, numbers)) if numbers else 0.01
+            if numbers:
+                amount = max(map(float, numbers))
 
         return parsed_text, local_path, detected_category, amount
 
@@ -133,7 +147,7 @@ def extract_text_and_save(file, year):
         st.error(f"OCR failed: {e}")
         return f"OCR Error: {e}", None, None, 0.01
 
-st.title("Canadian Corp Expense Tracker (Improved OCR)")
+st.title("Canadian Corp Expense Tracker (Google-Powered Categorization)")
 init_db()
 
 menu = st.sidebar.selectbox("Menu", ["Enter Expense", "Upload Receipt", "View Summary"])
@@ -151,7 +165,7 @@ if menu == "Enter Expense":
         st.success("Expense saved successfully!")
 
 elif menu == "Upload Receipt":
-    st.header("Scan Receipt (Auto-Category & Amount)")
+    st.header("Scan Receipt (Auto-Category via Google Search)")
     uploaded_file = st.file_uploader("Upload receipt image", type=["jpg", "jpeg", "png"])
     if uploaded_file:
         year = datetime.now().year
@@ -169,7 +183,7 @@ elif menu == "Upload Receipt":
                 amount = st.number_input("Amount ($)", value=amount if amount > 0 else 0.01, min_value=0.01, format="%.2f")
                 if st.button("Save Expense"):
                     insert_expense(year, date.isoformat(), category, description, amount)
-                    st.success("Auto-categorized expense saved!")
+                    st.success("Google-powered categorized expense saved!")
 
 elif menu == "View Summary":
     st.header("Year-End Expense Summary")
