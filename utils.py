@@ -122,3 +122,29 @@ def upload_receipt(image_path, year, category):
         upload_file_to_folder(service, category_folder, image_path, filename)
     except Exception as e:
         st.error(f"Failed to upload to Google Drive: {e}")
+
+def download_db_from_drive():
+    try:
+        service = get_drive_service()
+        # Look for a file named 'expenses.db' in root or Receipts folder
+        query = "name='expenses.db'"
+        results = service.files().list(q=query, spaces='drive', fields="files(id, name)").execute()
+        items = results.get("files", [])
+        if not items:
+            print("No remote DB found in Drive.")
+            return False
+        file_id = items[0]["id"]
+        request = service.files().get_media(fileId=file_id)
+        local_path = DB_FILE
+        from googleapiclient.http import MediaIoBaseDownload
+        import io
+        fh = io.FileIO(local_path, 'wb')
+        downloader = MediaIoBaseDownload(fh, request)
+        done = False
+        while done is False:
+            status, done = downloader.next_chunk()
+        print("✅ Downloaded DB from Google Drive.")
+        return True
+    except Exception as e:
+        print(f"⚠️ Failed to download DB from Drive: {e}")
+        return False

@@ -14,6 +14,8 @@ CATEGORIES = {
     "Utilities": 1200,
     "Miscellaneous": 800
 }
+from utils import download_db_from_drive
+download_db_from_drive()
 
 init_db()
 
