@@ -6,6 +6,7 @@ import requests
 import os
 import re
 from PIL import Image
+from PIL import ImageOps
 
 from drive_uploader import upload_receipt, get_drive_service, find_or_create_folder, upload_file_to_folder
 
@@ -129,7 +130,7 @@ def compress_image(path, max_size_kb=1024, quality=85, step=5):
     while os.path.getsize(path) > max_size_kb * 1024 and quality > 10:
         new_width = int(width * 0.9)
         new_height = int(height * 0.9)
-        img = img.resize((new_width, new_height), Image.ANTIALIAS)
+        img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
         img.save(path, optimize=True, quality=quality)
         quality -= step
     return path
