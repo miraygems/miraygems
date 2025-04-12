@@ -6,12 +6,9 @@ import requests
 import os
 import re
 from PIL import Image
-import uuid
-import base64
 
 from drive_uploader import upload_receipt
 
-# CRA Deductible Rules
 CATEGORIES = {
     "Meals & Entertainment": 0.50,
     "Office Supplies": 1.00,
@@ -30,7 +27,6 @@ DB_FILE = "expenses.db"
 LOCAL_SAVE_DIR = "receipts"
 os.makedirs(LOCAL_SAVE_DIR, exist_ok=True)
 
-# Initialize DB
 def init_db():
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
@@ -68,8 +64,32 @@ def get_summary(year):
     ).reset_index()
     return summary
 
-# OCR using OCR.space API
-def extract_text_and_save(file, year, category):
+def guess_category(text):
+    text_lower = text.lower()
+    if any(word in text_lower for word in ["restaurant", "burger", "pizza", "cafe", "food"]):
+        return "Meals & Entertainment"
+    elif any(word in text_lower for word in ["staples", "office", "pen", "paper"]):
+        return "Office Supplies"
+    elif any(word in text_lower for word in ["uber", "taxi", "airline", "flight", "hotel"]):
+        return "Travel"
+    elif any(word in text_lower for word in ["car", "gas", "fuel"]):
+        return "Automobile"
+    elif any(word in text_lower for word in ["lawyer", "consult", "accountant"]):
+        return "Professional Fees"
+    elif any(word in text_lower for word in ["rent", "lease"]):
+        return "Rent"
+    elif any(word in text_lower for word in ["salary", "payroll"]):
+        return "Salaries/Wages"
+    elif any(word in text_lower for word in ["hydro", "utility", "internet"]):
+        return "Utilities"
+    elif any(word in text_lower for word in ["ads", "advertisement", "marketing"]):
+        return "Advertising"
+    elif any(word in text_lower for word in ["insurance", "premium"]):
+        return "Insurance"
+    else:
+        return "Miscellaneous"
+
+def extract_text_and_save(file, year):
     try:
         today_str = datetime.today().strftime("%d-%m-%Y")
         base_name = f"receipt_{today_str}"
@@ -84,10 +104,8 @@ def extract_text_and_save(file, year, category):
         with open(local_path, "wb") as f:
             f.write(file.getbuffer())
 
-        # Upload to Google Drive
-        upload_receipt(local_path, year, category)
+        upload_receipt(local_path, year, "Uncategorized")
 
-        # OCR API request
         with open(local_path, 'rb') as image_file:
             response = requests.post(
                 'https://api.ocr.space/parse/image',
@@ -97,18 +115,25 @@ def extract_text_and_save(file, year, category):
         result = response.json()
         if result['IsErroredOnProcessing']:
             st.error("OCR API Error: " + result['ErrorMessage'][0])
-            return f"OCR Error: {result['ErrorMessage'][0]}", None
+            return f"OCR Error: {result['ErrorMessage'][0]}", None, None, 0.0
 
         parsed_text = result['ParsedResults'][0]['ParsedText']
-        return parsed_text, local_path
+        detected_category = guess_category(parsed_text)
+
+        amount_match = re.search(r"(?i)(total|amount)[^\d]*([0-9]+\.?[0-9]*)", parsed_text)
+        if amount_match:
+            amount = float(amount_match.group(2))
+        else:
+            numbers = re.findall(r"\d+\.\d{2}", parsed_text)
+            amount = max(map(float, numbers)) if numbers else 0.01
+
+        return parsed_text, local_path, detected_category, amount
 
     except Exception as e:
         st.error(f"OCR failed: {e}")
-        return f"OCR Error: {e}", None
+        return f"OCR Error: {e}", None, None, 0.01
 
-# --- Streamlit UI ---
-st.title("Canadian Corp Expense Tracker (OCR + Google Drive)")
-
+st.title("Canadian Corp Expense Tracker (Improved OCR)")
 init_db()
 
 menu = st.sidebar.selectbox("Menu", ["Enter Expense", "Upload Receipt", "View Summary"])
@@ -126,29 +151,22 @@ if menu == "Enter Expense":
         st.success("Expense saved successfully!")
 
 elif menu == "Upload Receipt":
-    st.header("Scan Receipt (Auto-Category)")
+    st.header("Scan Receipt (Auto-Category & Amount)")
     uploaded_file = st.file_uploader("Upload receipt image", type=["jpg", "jpeg", "png"])
-
     if uploaded_file:
         year = datetime.now().year
-        category = st.selectbox("Detected or Expected Category", list(CATEGORIES.keys()), index=0)
-
         with st.spinner("Reading and uploading receipt..."):
-            text, local_path = extract_text_and_save(uploaded_file, year, category)
+            text, local_path, category, amount = extract_text_and_save(uploaded_file, year)
             if text.startswith("OCR Error"):
                 st.error("Could not process receipt.")
             else:
                 st.success("Receipt saved and uploaded to Google Drive.")
                 st.text_area("Extracted Text", text, height=150)
-
-                amount_match = re.search(r"total\s*\$?([0-9]+\.?[0-9]*)", text, re.IGNORECASE)
-                amount = float(amount_match.group(1)) if amount_match else 0.0
-
                 st.subheader("Confirm Detected Details")
                 date = st.date_input("Date", value=datetime.today())
                 description = st.text_input("Description", value=text[:100])
+                category = st.selectbox("Category", list(CATEGORIES.keys()), index=list(CATEGORIES.keys()).index(category))
                 amount = st.number_input("Amount ($)", value=amount if amount > 0 else 0.01, min_value=0.01, format="%.2f")
-
                 if st.button("Save Expense"):
                     insert_expense(year, date.isoformat(), category, description, amount)
                     st.success("Auto-categorized expense saved!")
