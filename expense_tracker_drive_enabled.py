@@ -130,7 +130,6 @@ def compress_image(path, max_size_kb=1024, quality=85, step=5):
     while os.path.getsize(path) > max_size_kb * 1024 and quality > 10:
         new_width = int(width * 0.9)
         new_height = int(height * 0.9)
-        img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
         img.save(path, optimize=True, quality=quality)
         quality -= step
     return path
@@ -165,10 +164,7 @@ def extract_text_and_save(file, year):
         img = Image.open(local_path)
         img = img.convert("RGB")
         if img.width > 1024:
-            ratio = 1024 / float(img.width)
             height = int((float(img.height) * float(ratio)))
-            img = img.resize((1024, height), Image.Resampling.LANCZOS)
-            img.save(local_path)
 
 
         compress_image(local_path)
@@ -233,11 +229,6 @@ if menu == "Enter Expense":
         category = st.selectbox("Category", list(CATEGORIES.keys()), key="manual_entry_category_v1")
         description = st.text_input("Description", key="manual_entry_description_v1")
         amount = st.number_input("Amount ($)", min_value=0.01, format="%.2f", key="manual_entry_amount_v1")
-        if img.width > 1024:
-            ratio = 1024 / float(img.width)
-            height = int(float(img.height) * ratio)
-            img = img.resize((1024, height), Image.Resampling.LANCZOS)
-            img.save(local_path)
 
         upload_receipt(local_path, year, category)
     st.header("Scan Receipt (Auto-Category via Google Search)")
@@ -253,10 +244,6 @@ if menu == "Enter Expense":
                 st.text_area("Extracted Text", text, height=150)
                 with st.form("upload_receipt_form"):
                     st.subheader("Confirm Detected Details")
-                    date = st.date_input("Date", value=datetime.today(), key="upload_receipt_date_v1")
-                    description = st.text_input("Description", value=text[:100], key="upload_receipt_description_v1")
-                    category = st.selectbox("Category", list(CATEGORIES.keys()), index=list(CATEGORIES.keys()).index(category), key="upload_receipt_category_v1")
-                    amount = st.number_input("Amount ($)", value=amount if amount > 0 else 0.01, min_value=0.01, format="%.2f", key="upload_receipt_amount_v1")
         submitted_upload = st.form_submit_button("Save Expense")
         if submitted_upload:
                     insert_expense(year, date.isoformat(), category, description, amount)
@@ -268,7 +255,6 @@ elif menu == "Upload Receipt":
     if file is not None:
         image = Image.open(file).convert("RGB")
         if image.width > 1024:
-            ratio = 1024 / float(image.width)
             height = int((float(image.height) * float(ratio)))
             image = image.resize((1024, height), Image.Resampling.LANCZOS)
         temp_path = os.path.join(LOCAL_SAVE_DIR, "temp_receipt.png")
@@ -284,7 +270,6 @@ elif menu == "Upload Receipt":
             st.error("Could not process receipt.")
 elif menu == "View Summary":
     st.header("Year-End Expense Summary")
-    year = st.number_input("Select Year", min_value=2000, max_value=2100, value=datetime.now().year, key="summary_year_v1")
     df = get_summary(year)
     if not df.empty:
         st.dataframe(df)
