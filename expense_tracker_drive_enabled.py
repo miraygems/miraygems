@@ -27,7 +27,39 @@ DB_FILE = "expenses.db"
 LOCAL_SAVE_DIR = "receipts"
 os.makedirs(LOCAL_SAVE_DIR, exist_ok=True)
 
-def init_db():
+
+def download_db_from_drive():
+    try:
+        import io
+        from googleapiclient.http import MediaIoBaseDownload
+        from drive_uploader import get_drive_service, find_or_create_folder
+
+        service = get_drive_service()
+        folder_id = find_or_create_folder("Receipts")
+        query = f"name = 'expenses.db' and '{folder_id}' in parents"
+        result = service.files().list(q=query, fields="files(id, name)").execute()
+        files = result.get('files', [])
+        if files:
+            file_id = files[0]['id']
+            request = service.files().get_media(fileId=file_id)
+            with open("expenses.db", "wb") as f:
+                downloader = MediaIoBaseDownload(f, request)
+                done = False
+                while not done:
+                    status, done = downloader.next_chunk()
+    except Exception as e:
+        print("No existing DB found or failed to load from Drive.")
+
+def upload_db_to_drive():
+    try:
+        from drive_uploader import get_drive_service, find_or_create_folder, upload_file_to_folder
+        upload_file_to_folder("expenses.db", "Receipts")
+    except Exception as e:
+        print("Failed to upload DB to Drive.")
+
+download_db_from_drive()
+
+
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
     cur.execute("""
@@ -181,6 +213,7 @@ if menu == "Enter Expense":
     if st.button("Save Expense"):
         insert_expense(year, date.isoformat(), category, description, amount)
         st.success("Expense saved successfully!")
+        upload_db_to_drive()
 
 elif menu == "Upload Receipt":
     st.header("Scan Receipt (Auto-Category via Google Search)")
