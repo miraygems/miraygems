@@ -294,7 +294,7 @@ elif menu == "Upload Receipt":
 
 elif menu == "View Summary":
     st.header("Year-End Expense Summary")
-    year = st.number_input("Select Year", min_value=2000, max_value=2100, value=datetime.now().year)
+    year = st.number_input("Select Year", min_value=2000, max_value=2100, value=datetime.now().year, key="summary_year")
     df = get_summary(year)
     if not df.empty:
         st.dataframe(df)
