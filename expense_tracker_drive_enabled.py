@@ -226,7 +226,7 @@ menu = st.sidebar.selectbox("Menu", ["Enter Expense", "Upload Receipt", "View Su
 
 if menu == "Enter Expense":
     st.header("Enter New Expense")
-    year = st.number_input("Tax Year", min_value=2000, max_value=2100, value=datetime.now().year)
+    year = st.number_input("Tax Year", min_value=2000, max_value=2100, value=datetime.now().year, key="manual_year")
     date = st.date_input("Expense Date")
     category = st.selectbox("Category", list(CATEGORIES.keys()))
     description = st.text_input("Description")
@@ -260,7 +260,7 @@ if menu == "Enter Expense":
             upload_receipt(local_path, year, category)
 
     st.header("Enter New Expense")
-    year = st.number_input("Tax Year", min_value=2000, max_value=2100, value=datetime.now().year)
+    year = st.number_input("Tax Year", min_value=2000, max_value=2100, value=datetime.now().year, key="manual_year")
     date = st.date_input("Expense Date")
     category = st.selectbox("Category", list(CATEGORIES.keys()))
     description = st.text_input("Description")
