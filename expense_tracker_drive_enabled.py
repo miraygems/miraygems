@@ -4,7 +4,6 @@ from datetime import datetime
 from PIL import Image
 import pandas as pd
 import matplotlib.pyplot as plt
-
 from utils import (
     init_db, insert_expense, get_summary, extract_text_and_save,
     upload_receipt, download_db_from_drive
