@@ -106,8 +106,26 @@ def extract_text_and_save(file, year):
                 break
             counter += 1
 
+        
+        # Save uploaded file first
         with open(local_path, "wb") as f:
             f.write(file.getbuffer())
+
+        # Resize and compress if over 1MB
+        def compress_image(path, max_size_kb=1024, quality=85, step=5):
+            img = Image.open(path)
+            img = img.convert("RGB")
+            width, height = img.size
+            while os.path.getsize(path) > max_size_kb * 1024 and quality > 10:
+                new_width = int(width * 0.9)
+                new_height = int(height * 0.9)
+                img = img.resize((new_width, new_height), Image.ANTIALIAS)
+                img.save(path, optimize=True, quality=quality)
+                quality -= step
+            return path
+
+        compress_image(local_path)
+    
 
         upload_receipt(local_path, year, "Uncategorized")
 
