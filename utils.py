@@ -81,13 +81,15 @@ def get_drive_service():
     creds = None
     if "token" in st.secrets:
         import base64, pickle
-    token_str = st.secrets["token"]
-    if isinstance(token_str, dict):
-        token_str = token_str["token"]
-    else:
-        raise Exception("Missing Google Drive token in secrets.")
-    creds = pickle.loads(base64.b64decode(token_str))
-    return build("drive", "v3", credentials=creds)
+	token_str = st.secrets.get("token")
+	if isinstance(token_str, dict):
+	    token_str = token_str.get("token")
+
+	if not token_str:
+    	    raise Exception("Missing Google Drive token in secrets.")
+
+	creds = pickle.loads(base64.b64decode(token_str))
+    	return build("drive", "v3", credentials=creds)
 
 def find_or_create_folder(service, name, parent=None):
     query = f"name='{name}' and mimeType='application/vnd.google-apps.folder'"
