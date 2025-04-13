@@ -1,4 +1,5 @@
 import sqlite3
+import shutil
 import os
 import pytesseract
 from PIL import Image
@@ -50,32 +51,35 @@ def get_summary(year):
 
 def extract_text_and_save(image_path):
     try:
-        text = pytesseract.image_to_string(Image.open(image_path))
-        lines = text.splitlines()
-        category = "Miscellaneous"
-        amount = 0.01
-        for line in lines:
-            lower = line.lower()
-            for keyword, cat in CATEGORIES.items():
-                if keyword in lower:
-                    category = cat
-            if "$" in line or "total" in lower:
-                import re
-                found = re.findall(r"\$?\s?(\d+\.\d{2})", line)
-                if found:
-                    amount = float(found[-1])
-        today_str = datetime.today().strftime("%d-%m-%Y")
-        base_name = f"receipt_{today_str}"
-        counter = 1
-        while True:
-            file_name = f"{base_name}_{counter}.png"
-            full_path = os.path.join(LOCAL_SAVE_DIR, file_name)
-            if not os.path.exists(full_path):
-                os.rename(image_path, full_path)
-                return text, full_path, category, amount
-            counter += 1
+        import requests
+
+        with open(image_path, "rb") as f:
+            file_bytes = f.read()
+
+        api_key = st.secrets["ocr"]["api_key"]
+        response = requests.post(
+            "https://api.ocr.space/parse/image",
+            files={"filename": file_bytes},
+            data={"apikey": api_key, "language": "eng", "isOverlayRequired": False},
+        )
+        result = response.json()
+        parsed = result["ParsedResults"][0]["ParsedText"]
+        if not parsed:
+            raise ValueError("OCR returned empty text")
+
+        # Save image under folder structure
+        year = datetime.now().year
+        category = categorize_expense(parsed)
+        amount = extract_amount(parsed)
+
+        filename = f"{datetime.now().strftime('%d-%m-%Y-%H%M%S')}.png"
+        local_path = os.path.join(LOCAL_SAVE_DIR, filename)
+        shutil.copy(image_path, local_path)
+
+        return parsed, local_path, category, amount
+
     except Exception as e:
-        return f"OCR Error: {e}", None, "Miscellaneous", 0.01
+        return f"OCR Error: {e}", None, None, None
 
 def get_drive_service():
     creds = None
