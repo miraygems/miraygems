@@ -63,14 +63,18 @@ def extract_text_and_save(image_path):
             data={"apikey": api_key, "language": "eng", "isOverlayRequired": False},
         )
         result = response.json()
+
+        if "ParsedResults" not in result or not result["ParsedResults"]:
+            raise ValueError(result.get("ErrorMessage", "No text found."))
+
         parsed = result["ParsedResults"][0]["ParsedText"]
         if not parsed:
             raise ValueError("OCR returned empty text")
 
-        # Save image under folder structure
+        # Save receipt image
         year = datetime.now().year
         category = categorize_expense(parsed)
-        amount = extract_amount(parsed)
+        amount = extract_amount(parsed) or 0.0  # fallback to 0 if not detected
 
         filename = f"{datetime.now().strftime('%d-%m-%Y-%H%M%S')}.png"
         local_path = os.path.join(LOCAL_SAVE_DIR, filename)
@@ -79,7 +83,7 @@ def extract_text_and_save(image_path):
         return parsed, local_path, category, amount
 
     except Exception as e:
-        return f"OCR Error: {e}", None, None, None
+        return f"OCR Error: {e}", None, None, 0.0
 
 def get_drive_service():
     creds = None
