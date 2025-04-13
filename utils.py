@@ -85,7 +85,7 @@ def get_drive_service():
         if isinstance(token_str, dict):
             token_str = token_str.get("token")
 
-         if not token_str:
+        if not token_str:
             raise Exception("Missing Google Drive token in secrets.")
 
         creds = pickle.loads(base64.b64decode(token_str))
