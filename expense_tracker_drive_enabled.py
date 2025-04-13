@@ -75,6 +75,17 @@ elif menu == "Upload Receipt":
         
         with st.spinner("Processing receipt..."):
             text, local_path, category, amount = extract_text_and_save(temp_path)
+        if text and local_path and category:
+            st.success("Receipt scanned successfully.")
+            with st.expander("Show Extracted Text"):
+                st.text_area("Extracted Text", text, height=200)
+            st.write(f"Predicted Category: {category}")
+            st.write(f"Detected Amount: ${amount:.2f}")
+            insert_expense(datetime.now().year, datetime.now().isoformat(), category, "OCR Upload", amount)
+            upload_receipt(local_path, datetime.now().year, category)
+            st.info("Saved and uploaded.")
+        else:
+            st.error(text or "Could not extract text.")
 
         if text:
             st.success("Receipt scanned successfully.")
